@@ -29,6 +29,17 @@ class ScipBuildToolTest : BuildToolHarness() {
                 expectedScipFiles = 2,
             ),
             checkBuild(
+                "test-code",
+                fixture = "scip/test-code",
+                expectedScipFiles = 2,
+                expectedTestCode =
+                    """
+                    |foo/ExampleTest.java: test code
+                    |foo/HelperTest.kt: test code
+                    |"""
+                        .trimMargin(),
+            ),
+            checkBuild(
                 "compiles-with-classpath",
                 fixture = "scip/compiles-with-classpath",
                 expectedScipFiles = 1,

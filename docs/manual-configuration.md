@@ -64,13 +64,22 @@ compiler plugin. To do this you need to explicitly configure two directories:
   Alternatively, pass in `-targetroot:javac-classes-directory` for the plugin to
   automatically use the `javac` output directory.
 
+Optionally, add `-test-code:on` when the compilation compiles test code. Every
+occurrence in the generated SCIP files then has the SCIP
+[`SymbolRole.Test`](https://github.com/scip-code/scip/blob/main/scip.proto)
+role, in addition to its other roles. Build tools compile test code separately
+from the main code, so pass this option only to the test compilation: for
+example, Gradle's `compileTestJava` task or the `default-testCompile` execution
+of Maven's `maven-compiler-plugin`.
+
 If you're using Gradle.
 
 ```groovy
 tasks.withType(JavaCompile) {
   def sourceroot = rootProject.projectDir
   def targetroot = new File(rootProject.buildDir, "scip-targetroot")
-  options.compilerArgs << "-Xplugin:scip -sourceroot:$sourceroot -targetroot:$targetroot"
+  def testCode = name == "compileTestJava" ? " -test-code:on" : ""
+  options.compilerArgs << "-Xplugin:scip -sourceroot:$sourceroot -targetroot:$targetroot$testCode"
 }
 ```
 

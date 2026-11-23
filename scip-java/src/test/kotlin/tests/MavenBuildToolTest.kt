@@ -19,6 +19,13 @@ class MavenBuildToolTest : BuildToolHarness() {
                     |maven:org.scip-code:example:1.0-SNAPSHOT
                     |"""
                         .trimMargin(),
+                // The testCompile goal writes to Maven's test output directory.
+                expectedTestCode =
+                    """
+                    |src/main/java/com/Example.java: not test code
+                    |src/test/java/com/ExampleSuite.java: test code
+                    |"""
+                        .trimMargin(),
             ),
             checkBuild(
                 "build-command",

@@ -18,6 +18,7 @@ class GradleBuildToolTest : BuildToolHarness() {
         fixture: String,
         expectedScipFiles: Int = 0,
         expectedPackages: String = "",
+        expectedTestCode: String = "",
         extraArguments: List<String> = emptyList(),
         substitutions: Map<String, String> = emptyMap(),
         runs: Int = 1,
@@ -27,6 +28,7 @@ class GradleBuildToolTest : BuildToolHarness() {
             fixture,
             expectedScipFiles = expectedScipFiles,
             expectedPackages = expectedPackages,
+            expectedTestCode = expectedTestCode,
             extraArguments = extraArguments,
             substitutions = substitutions,
             runs = runs,
@@ -126,6 +128,62 @@ class GradleBuildToolTest : BuildToolHarness() {
             )
         )
         add(checkGradleBuild("basic", "gradle/basic", expectedScipFiles = 2))
+        // Test code is the classes that Gradle's Test tasks run: the test source
+        // set, JVM test suites and source sets run by custom Test tasks, in Java
+        // and in Kotlin, but not other source sets.
+        add(
+            checkGradleBuild(
+                "test-code",
+                "gradle/test-code",
+                expectedScipFiles = 7,
+                extraArguments =
+                    listOf(
+                        "--",
+                        "clean",
+                        "classes",
+                        "testClasses",
+                        "integrationTestClasses",
+                        "legacyTestClasses",
+                        "toolsClasses",
+                    ),
+                expectedTestCode =
+                    """
+                    |src/integrationTest/java/example/GreeterIntegrationTest.java: test code
+                    |src/legacyTest/java/example/GreeterLegacyTest.java: test code
+                    |src/main/java/example/Greeter.java: not test code
+                    |src/main/kotlin/example/Farewell.kt: not test code
+                    |src/test/java/example/GreeterTest.java: test code
+                    |src/test/kotlin/example/FarewellTest.kt: test code
+                    |src/tools/java/example/GreeterTool.java: not test code
+                    |"""
+                        .trimMargin(),
+            )
+        )
+        // In Kotlin Multiplatform, the JVM test compilation is test code too.
+        add(
+            checkGradleBuild(
+                "kotlin-multiplatform-test-code",
+                "gradle/kotlin-multiplatform-test-code",
+                expectedScipFiles = 2,
+                expectedTestCode =
+                    """
+                    |src/commonMain/kotlin/example/Greeter.kt: not test code
+                    |src/jvmTest/kotlin/example/GreeterTest.kt: test code
+                    |"""
+                        .trimMargin(),
+            )
+        )
+        // Regression test: finding the test classes directories realizes the
+        // test compilation task, which did not run. That used to modify the list
+        // of Kotlin compile tasks while scipKotlinConfigs iterated over it.
+        add(
+            checkGradleBuild(
+                "kotlin-multiplatform-main-only",
+                "gradle/kotlin-multiplatform-test-code",
+                expectedScipFiles = 1,
+                extraArguments = listOf("--", "compileKotlinJvm"),
+            )
+        )
         // Regression test: FAIL_ON_PROJECT_REPOS rejects project-level
         // repositories, so the plugin must not inject Maven Central/local.
         // https://github.com/scip-code/scip-java/issues/847

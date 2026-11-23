@@ -13,6 +13,9 @@ public class InjectScipOptions {
   /**
    * Updates a list of Java compiler arguments to include -Xplugin:scip.
    *
+   * <p>Compilations whose output directory ({@code -d}) is named {@code test-classes}, Maven's
+   * default test output directory, also get the plugin option {@code -test-code:on}.
+   *
    * <p>This main method should be used by a `javac` wrapper script like this:
    *
    * <pre>

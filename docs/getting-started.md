@@ -255,6 +255,23 @@ free to subscribe to the tracking issues to receive updates on your build tool.
 See the [manual configuration](manual-configuration.md) guide for instructions
 on how to configure scip-java to work with any build tool.
 
+### Test code
+
+Occurrences in test code have the SCIP
+[`SymbolRole.Test`](https://github.com/scip-code/scip/blob/main/scip.proto)
+role, in addition to their other roles. Test code is the code that the build
+tool itself treats as test code.
+
+| Build tool       | Test code                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Gradle           | Classes that a `Test` task runs: the `test` source set, JVM test suites, and source sets run by custom `Test` tasks |
+| Maven            | Sources compiled into Maven's default test output directory, `target/test-classes`                                  |
+| Bazel (aspect)   | Targets with `testonly = True`, which includes test rules such as `java_test`                                       |
+| `scip-java.json` | All sources, when the file contains `"testCode": true`                                                              |
+
+With manual configuration, pass the `-test-code:on` compiler plugin option to
+the compilation of test code.
+
 ### Gradle
 
 The `scip-java index` build should be able to automatically index most Gradle

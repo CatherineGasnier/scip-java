@@ -1,0 +1,38 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.kotlin.jvm' version '2.4.0'
+}
+kotlin {
+    jvmToolchain(17)
+}
+repositories {
+    mavenCentral()
+}
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
+}
+testing {
+    suites {
+        // The classes of a JVM test suite are test code.
+        integrationTest(JvmTestSuite) {
+            dependencies {
+                implementation project()
+            }
+        }
+    }
+}
+sourceSets {
+    // Run by a custom Test task, so its classes are test code too.
+    legacyTest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+    // No Test task runs these classes, so they are not test code.
+    tools {
+        compileClasspath += sourceSets.main.output
+    }
+}
+tasks.register('legacyTest', Test) {
+    testClassesDirs = sourceSets.legacyTest.output.classesDirs
+    classpath = sourceSets.legacyTest.runtimeClasspath
+}
