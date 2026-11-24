@@ -163,6 +163,7 @@ class ScipBuildTool(index: IndexCommand) : BuildTool("SCIP", index) {
                     sourceRoots = allKotlinFiles,
                     classpath = classpath,
                     jdkHome = jdkHome,
+                    testCode = config.testCode,
                 )
                 .run()
             null
@@ -192,7 +193,8 @@ class ScipBuildTool(index: IndexCommand) : BuildTool("SCIP", index) {
         arguments += generatedDir(tmp, "h")
         arguments += "-classpath"
         arguments += classpath.joinToString(File.pathSeparator)
-        arguments += "-Xplugin:scip -targetroot:$targetroot -sourceroot:$sourceroot"
+        val testCodeOption = if (config.testCode) " -test-code:on" else ""
+        arguments += "-Xplugin:scip -targetroot:$targetroot -sourceroot:$sourceroot$testCodeOption"
         if (config.processorpath.isNotEmpty()) {
             arguments += "-processorpath"
             val processorpath =
@@ -349,9 +351,15 @@ class ScipBuildTool(index: IndexCommand) : BuildTool("SCIP", index) {
     private fun generatedDir(tmp: Path, name: String): String =
         Files.createDirectory(tmp.resolve(name)).toString()
 
-    /** Configuration parsed from `scip-java.json` / `lsif-java.json`. */
+    /**
+     * Configuration parsed from `scip-java.json` / `lsif-java.json`.
+     *
+     * [testCode] marks the sources as test code, for example because the Bazel target that compiles
+     * them is `testonly`.
+     */
     private data class Config(
         val reportWarningOnEmptyIndex: Boolean = true,
+        val testCode: Boolean = false,
         val javaHome: String? = null,
         val dependencies: List<String> = emptyList(),
         val sourceFiles: List<String> = emptyList(),
@@ -371,6 +379,7 @@ class ScipBuildTool(index: IndexCommand) : BuildTool("SCIP", index) {
                             "reportWarningOnEmptyIndex",
                             defaults.reportWarningOnEmptyIndex,
                         ),
+                    testCode = obj.boolean("testCode", defaults.testCode),
                     javaHome = obj["javaHome"]?.stringOrNull(),
                     dependencies = obj.stringList("dependencies"),
                     sourceFiles = obj.stringList("sourceFiles"),

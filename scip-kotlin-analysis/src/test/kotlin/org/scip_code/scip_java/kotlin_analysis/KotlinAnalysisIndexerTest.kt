@@ -105,6 +105,35 @@ class KotlinAnalysisIndexerTest {
     }
 
     @Test
+    fun `test code gives every occurrence the Test role`(@TempDir path: Path) {
+        val code =
+            """
+            package snapshots
+
+            class GreeterTest {
+                fun greetsByName() = check("Hello, Ada")
+
+                private fun check(greeting: String) = greeting.isNotEmpty()
+            }
+            """
+
+        val test = compileScip(path, code, testCode = true)
+        assertTrue(test.occurrencesList.isNotEmpty())
+        assertTrue(
+            test.occurrencesList.all { it.symbolRoles and SymbolRole.Test.number != 0 },
+            "every occurrence in test code must have the Test role:\n$test",
+        )
+        // The test method and the helper method keep their Definition role.
+        assertContains(definitions(test), "snapshots/GreeterTest#greetsByName().")
+        assertContains(definitions(test), "snapshots/GreeterTest#check().")
+        // References from test code to other code are test-code references.
+        assertContains(references(test), "kotlin/String#")
+
+        val other = compileScip(path, code)
+        assertTrue(other.occurrencesList.none { it.symbolRoles and SymbolRole.Test.number != 0 })
+    }
+
+    @Test
     fun `an analysis failure skips the entire file and continues indexing`(@TempDir path: Path) {
         val sourceroot = path.toRealPath()
         val src = Files.createDirectories(sourceroot.resolve("src"))
@@ -407,7 +436,7 @@ class KotlinAnalysisIndexerTest {
         }
     }
 
-    private fun compileScip(path: Path, code: String): Document {
+    private fun compileScip(path: Path, code: String, testCode: Boolean = false): Document {
         val sourceroot = path.toRealPath()
         val source = Files.createDirectories(sourceroot.resolve("src")).resolve("Test.kt")
         Files.writeString(source, code.trimIndent())
@@ -416,6 +445,7 @@ class KotlinAnalysisIndexerTest {
                 targetroot = sourceroot.resolve("scip-targetroot"),
                 sourceRoots = listOf(source),
                 classpath = listOf(kotlinStdlibJar()),
+                testCode = testCode,
             )
             .run()
             .single()

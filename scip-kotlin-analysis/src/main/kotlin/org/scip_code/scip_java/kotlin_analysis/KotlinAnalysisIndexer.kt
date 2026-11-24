@@ -81,6 +81,9 @@ import org.scip_code.scip_java.shared.ScipShardWriter
  * One SCIP shard is written per source file under
  * `<targetroot>/META-INF/scip/<relative-source-path>.scip`, the layout produced by the scip-javac
  * compiler plugin.
+ *
+ * Set [testCode] when the build tool compiles [sourceRoots] as test code: every occurrence then
+ * gets the `SymbolRole.Test` role, like `-test-code:on` does for the scip-javac plugin.
  */
 class KotlinAnalysisIndexer(
     private val sourceroot: Path,
@@ -88,6 +91,7 @@ class KotlinAnalysisIndexer(
     private val sourceRoots: List<Path>,
     private val classpath: List<Path> = emptyList(),
     private val jdkHome: Path? = Paths.get(System.getProperty("java.home")),
+    private val testCode: Boolean = false,
     private val callback: (Document) -> Unit = {},
 ) {
     fun run(): List<Document> {
@@ -154,7 +158,7 @@ class KotlinAnalysisIndexer(
     private fun indexFile(ktFile: KtFile): Document {
         val text = ktFile.text
         val lines = LineIndex(text)
-        val builder = ScipDocumentBuilder()
+        val builder = ScipDocumentBuilder(testCode)
         analyze(ktFile) { ktFile.accept(IndexingVisitor(this, SymbolsCache(this), lines, builder)) }
         val relativePath =
             ScipShardPaths.relativePath(sourceroot, Paths.get(ktFile.virtualFilePath))

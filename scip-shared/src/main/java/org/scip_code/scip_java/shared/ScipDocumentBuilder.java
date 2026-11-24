@@ -9,6 +9,7 @@ import java.util.Objects;
 import org.scip_code.scip.Document;
 import org.scip_code.scip.Occurrence;
 import org.scip_code.scip.SymbolInformation;
+import org.scip_code.scip.SymbolRole;
 
 /**
  * Accumulator for SCIP {@link Occurrence}/{@link SymbolInformation} that assembles a final SCIP
@@ -25,10 +26,25 @@ public final class ScipDocumentBuilder {
 
   private final Map<OccurrenceKey, Occurrence> occurrences = new LinkedHashMap<>();
   private final Map<String, SymbolInformation> symbols = new LinkedHashMap<>();
+  private final boolean testCode;
+
+  /**
+   * @param testCode whether the document is test code. If so, every occurrence gets the {@link
+   *     SymbolRole#Test} role in addition to its own roles, definitions and references alike.
+   */
+  public ScipDocumentBuilder(boolean testCode) {
+    this.testCode = testCode;
+  }
 
   public void addOccurrence(Occurrence occurrence) {
     if (occurrence.getSymbol().isEmpty()) return;
-    occurrences.putIfAbsent(new OccurrenceKey(occurrence), occurrence);
+    Occurrence added = testCode ? withTestRole(occurrence) : occurrence;
+    occurrences.putIfAbsent(new OccurrenceKey(added), added);
+  }
+
+  private static Occurrence withTestRole(Occurrence occurrence) {
+    int roles = occurrence.getSymbolRoles() | SymbolRole.Test_VALUE;
+    return occurrence.toBuilder().setSymbolRoles(roles).build();
   }
 
   public void addSymbol(SymbolInformation symbol) {

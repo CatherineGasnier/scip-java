@@ -120,6 +120,9 @@ def _scip_java(target, ctx):
         "processorpath": processorpath,
         "bootclasspath": bootclasspath,
         "reportWarningOnEmptyIndex": False,
+        # Bazel's own notion of test code: test rules, and the helper
+        # libraries only tests may depend on, are `testonly`.
+        "testCode": ctx.rule.attr.testonly,
     })
     build_config_path = ctx.actions.declare_file(ctx.label.name + ".scip.json")
 

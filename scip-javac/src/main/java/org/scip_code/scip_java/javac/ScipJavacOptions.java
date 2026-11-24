@@ -72,6 +72,8 @@ public class ScipJavacOptions extends ScipOptions {
         result.includeText = true;
       } else if (arg.equals("-text:off")) {
         result.includeText = false;
+      } else if (arg.equals("-test-code:on")) {
+        result.testCode = true;
       } else if (arg.equals("-verbose")) {
         result.verboseEnabled = true;
       } else if (arg.equals("-verbose:on")) {

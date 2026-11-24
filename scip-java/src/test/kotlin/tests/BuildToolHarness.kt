@@ -14,6 +14,9 @@ import kotlin.test.fail
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.DynamicTest.dynamicTest
+import org.scip_code.scip.Document
+import org.scip_code.scip.Index
+import org.scip_code.scip.SymbolRole
 import org.scip_code.scip_java.CliEnvironment
 import org.scip_code.scip_java.ScipJavaApp
 import org.scip_code.scip_java.buildtools.ClasspathEntry
@@ -108,6 +111,7 @@ abstract class BuildToolHarness {
         extraArguments: List<String> = emptyList(),
         expectedError: ((String) -> Unit)? = null,
         expectedPackages: String = "",
+        expectedTestCode: String = "",
         initCommand: (Path) -> List<String> = { emptyList() },
         prepare: (Path) -> Unit = {},
         targetRoot: String? = null,
@@ -174,10 +178,34 @@ abstract class BuildToolHarness {
                             .joinToString("\n")
                     assertNoDiff(obtained, expectedPackages)
                 }
+
+                if (expectedTestCode.isNotEmpty()) {
+                    assertNoDiff(testCode(workingDirectory.resolve("index.scip")), expectedTestCode)
+                }
             } finally {
                 base.toFile().deleteRecursively()
             }
         }
+
+    /**
+     * Lists the documents of a SCIP index, one per line, each followed by whether it is test code:
+     * whether all, none or only some of its occurrences have the `SymbolRole.Test` role.
+     */
+    private fun testCode(index: Path): String =
+        Index.parseFrom(Files.readAllBytes(index))
+            .documentsList
+            .map { "${it.relativePath}: ${testCode(it)}" }
+            .sorted()
+            .joinToString("\n")
+
+    private fun testCode(document: Document): String {
+        val testRoles = document.occurrencesList.map { it.symbolRoles and SymbolRole.Test.number }
+        return when {
+            testRoles.all { it != 0 } -> "test code"
+            testRoles.none { it != 0 } -> "not test code"
+            else -> "partly test code"
+        }
+    }
 
     protected fun checkErrorOutput(
         name: String,

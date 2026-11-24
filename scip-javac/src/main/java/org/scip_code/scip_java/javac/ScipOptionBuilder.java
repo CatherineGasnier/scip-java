@@ -12,10 +12,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ScipOptionBuilder {
+  /**
+   * The name of Maven's default {@code project.build.testOutputDirectory}. Maven's {@code
+   * testCompile} goal passes it as {@code -d}, while the {@code compile} goal passes {@code
+   * classes}.
+   */
+  private static final String MAVEN_TEST_OUTPUT_DIRECTORY = "test-classes";
+
   private String previousArg = "";
   private final ArrayList<String> oldArgs = new ArrayList<>();
   private final ArrayList<String> result = new ArrayList<>();
   private boolean isClasspathUpdated = false;
+  private boolean isTestCode = false;
 
   public static final String ERRORPATH = System.getProperty("scip.errorpath", "");
   private static final String PLUGINPATH = System.getProperty("scip.pluginpath", "");
@@ -27,6 +35,9 @@ public class ScipOptionBuilder {
   public void processArgument(String arg) {
     oldArgs.add(arg);
     arg = unwrapQuote(arg);
+    if ("-d".equals(previousArg)) {
+      isTestCode = isMavenTestOutputDirectory(arg);
+    }
     if ("-processorpath".equals(previousArg)
         || "-classpath".equals(previousArg)
         || "-cp".equals(previousArg)) {
@@ -43,6 +54,11 @@ public class ScipOptionBuilder {
     }
 
     previousArg = arg;
+  }
+
+  private static boolean isMavenTestOutputDirectory(String directory) {
+    Path name = Paths.get(directory).getFileName();
+    return name != null && name.toString().equals(MAVEN_TEST_OUTPUT_DIRECTORY);
   }
 
   private String unwrapQuote(String arg) {
@@ -62,7 +78,10 @@ public class ScipOptionBuilder {
   }
 
   private String xpluginOption() {
-    return String.format("\"-Xplugin:scip -sourceroot:%s -targetroot:%s\"", SOURCEROOT, TARGETROOT);
+    String testCodeOption = isTestCode ? " -test-code:on" : "";
+    return String.format(
+        "\"-Xplugin:scip -sourceroot:%s -targetroot:%s%s\"",
+        SOURCEROOT, TARGETROOT, testCodeOption);
   }
 
   public ArrayList<String> finalResult() {

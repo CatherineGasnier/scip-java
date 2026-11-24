@@ -127,6 +127,7 @@ This means our SCIP compiler plugin was not attached to one or more JavaCompile 
 
     private fun indexKotlinConfig(config: Path) {
         var sourceroot: Path = index.workingDirectory
+        var testCode = false
         val classpath = mutableListOf<Path>()
         val sources = mutableListOf<Path>()
         for (line in Files.readAllLines(config)) {
@@ -135,6 +136,7 @@ This means our SCIP compiler plugin was not attached to one or more JavaCompile 
             val value = line.substring(separator + 1)
             when (line.substring(0, separator)) {
                 "sourceroot" -> sourceroot = Paths.get(value)
+                "test-code" -> testCode = value.toBoolean()
                 "classpath" -> classpath.add(Paths.get(value))
                 "source" -> sources.add(Paths.get(value))
             }
@@ -145,6 +147,7 @@ This means our SCIP compiler plugin was not attached to one or more JavaCompile 
                 targetroot = targetroot(),
                 sourceRoots = sources,
                 classpath = classpath,
+                testCode = testCode,
             )
             .run()
     }

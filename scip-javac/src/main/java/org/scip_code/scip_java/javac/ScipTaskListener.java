@@ -118,7 +118,8 @@ public final class ScipTaskListener implements TaskListener {
       return;
     }
     Path output = path.getOrThrow();
-    PerSourceState state = perSourceState.computeIfAbsent(output, k -> new PerSourceState());
+    PerSourceState state =
+        perSourceState.computeIfAbsent(output, k -> new PerSourceState(options.testCode));
     ScipVisitor visitor =
         new ScipVisitor(
             globals,
@@ -149,9 +150,13 @@ public final class ScipTaskListener implements TaskListener {
   }
 
   private static final class PerSourceState {
-    final ScipDocumentBuilder documentBuilder = new ScipDocumentBuilder();
+    final ScipDocumentBuilder documentBuilder;
     final LocalSymbolsCache<Element, String> locals =
         new LocalSymbolsCache<>(new IdentityHashMap<>(), ScipSymbols::local);
+
+    PerSourceState(boolean testCode) {
+      this.documentBuilder = new ScipDocumentBuilder(testCode);
+    }
   }
 
   public static Path absolutePathFromUri(ScipJavacOptions options, JavaFileObject file) {

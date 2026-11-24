@@ -12,10 +12,12 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.initialization.Settings;
 import org.gradle.api.internal.GradleInternal;
@@ -27,6 +29,7 @@ import org.gradle.api.tasks.TaskProvider;
 import org.gradle.api.tasks.TaskState;
 import org.gradle.api.tasks.compile.CompileOptions;
 import org.gradle.api.tasks.compile.JavaCompile;
+import org.gradle.api.tasks.testing.Test;
 import org.gradle.process.CommandLineArgumentProvider;
 
 public class ScipGradlePlugin implements Plugin<Project> {
@@ -75,6 +78,8 @@ public class ScipGradlePlugin implements Plugin<Project> {
     // about. Built up as we detect the java and kotlin plugins.
     List<String> triggers = new ArrayList<>();
 
+    FileCollection testClassesDirs = testClassesDirs(project);
+
     boolean isAndroid = ANDROID_PLUGINS.stream().anyMatch(id -> project.getPlugins().hasPlugin(id));
 
     if (project.getPlugins().hasPlugin("java") || isAndroid) {
@@ -119,7 +124,9 @@ public class ScipGradlePlugin implements Plugin<Project> {
                                   + " -sourceroot:"
                                   + sourceRoot
                                   + " -randomtimestamp="
-                                  + System.nanoTime()));
+                                  + System.nanoTime(),
+                              task,
+                              testClassesDirs));
                 }
               });
     }
@@ -159,12 +166,18 @@ public class ScipGradlePlugin implements Plugin<Project> {
                 export ->
                     export.doLast(
                         ignored -> {
-                          for (Task task : kotlinCompileTasks) {
+                          // Resolving the test classes directories can realize Kotlin
+                          // compile tasks that did not run, such as a Kotlin
+                          // Multiplatform test compilation, which adds them to
+                          // kotlinCompileTasks. So resolve them first, and iterate over
+                          // a copy.
+                          Set<File> testDirs = testClassesDirs.getFiles();
+                          for (Task task : List.copyOf(kotlinCompileTasks)) {
                             // Only tasks of this build that succeeded; up-to-date
                             // and cached tasks count as executed.
                             TaskState state = task.getState();
                             if (state.getExecuted() && state.getFailure() == null) {
-                              writeKotlinConfig(task, sourceRoot, targetRoot);
+                              writeKotlinConfig(task, sourceRoot, targetRoot, testDirs);
                             }
                           }
                         }));
@@ -183,6 +196,35 @@ public class ScipGradlePlugin implements Plugin<Project> {
     project.getTasks().create("scipCompileAll").dependsOn(triggers);
 
     project.getTasks().create("scipPrintDependencies", WriteDependencies.class);
+  }
+
+  /**
+   * Returns the directories that the project's {@link Test} tasks scan for test classes. See {@link
+   * #compilesTestCode} for how they classify compile tasks.
+   *
+   * <p>The collection is lazy: it reads each task's {@code testClassesDirs} when it is queried, so
+   * builds may still change them after this plugin runs.
+   */
+  private static FileCollection testClassesDirs(Project project) {
+    ConfigurableFileCollection result = project.files();
+    // all() rather than configureEach(): configureEach() only sees realized tasks, and Gradle does
+    // not realize the lazily registered Test tasks, such as `test`, when only compile tasks run.
+    project
+        .getTasks()
+        .withType(Test.class)
+        .all(test -> result.from((Callable<FileCollection>) test::getTestClassesDirs));
+    return result;
+  }
+
+  /**
+   * Whether a Java or Kotlin compile task compiles test code: whether it writes its classes into a
+   * directory that a {@link Test} task runs. This covers the {@code test} source set, JVM test
+   * suites, and custom source sets wired to a {@code Test} task, but not source sets that no {@code
+   * Test} task runs, such as test fixtures.
+   */
+  private static boolean compilesTestCode(Task compileTask, Set<File> testClassesDirs) {
+    return compileTask.getOutputs().getFiles().getFiles().stream()
+        .anyMatch(testClassesDirs::contains);
   }
 
   /**
@@ -274,10 +316,11 @@ public class ScipGradlePlugin implements Plugin<Project> {
   }
 
   /**
-   * Dumps the sources and classpath of a Kotlin compile task to {@code
-   * kotlin-configs/<task>-<hash>.txt}.
+   * Dumps the sources and classpath of a Kotlin compile task, and whether it compiles test code, to
+   * {@code kotlin-configs/<task>-<hash>.txt}.
    */
-  private static void writeKotlinConfig(Task task, String sourceRoot, String targetRoot) {
+  private static void writeKotlinConfig(
+      Task task, String sourceRoot, String targetRoot, Set<File> testClassesDirs) {
     try {
       List<String> lines = new ArrayList<>();
       lines.add("sourceroot " + sourceRoot);
@@ -318,6 +361,7 @@ public class ScipGradlePlugin implements Plugin<Project> {
       if (sources == 0) {
         return;
       }
+      lines.add("test-code " + compilesTestCode(task, testClassesDirs));
 
       Path configDir = Paths.get(targetRoot, "kotlin-configs");
       Files.createDirectories(configDir);
@@ -353,15 +397,26 @@ public class ScipGradlePlugin implements Plugin<Project> {
   private static class JavacPluginArgument implements CommandLineArgumentProvider {
     private final CompileOptions options;
     private final String argument;
+    private final JavaCompile task;
+    private final FileCollection testClassesDirs;
 
-    JavacPluginArgument(CompileOptions options, String argument) {
+    /**
+     * @param task the compile task. When it compiles test code, the argument also enables the
+     *     plugin's {@code -test-code:on} option.
+     */
+    JavacPluginArgument(
+        CompileOptions options, String argument, JavaCompile task, FileCollection testClassesDirs) {
       this.options = options;
       this.argument = argument;
+      this.task = task;
+      this.testClassesDirs = testClassesDirs;
     }
 
     @Input
     public String getArgument() {
-      return argument;
+      return compilesTestCode(task, testClassesDirs.getFiles())
+          ? argument + " -test-code:on"
+          : argument;
     }
 
     @Override
@@ -376,7 +431,7 @@ public class ScipGradlePlugin implements Plugin<Project> {
       // javac rejects the plugin configuration if it's given more than once.
       boolean alreadyAdded =
           args.stream().anyMatch(arg -> String.valueOf(arg).startsWith("-Xplugin:scip"));
-      return alreadyAdded ? List.of() : List.of(argument);
+      return alreadyAdded ? List.of() : List.of(getArgument());
     }
   }
 }

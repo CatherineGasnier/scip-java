@@ -106,6 +106,18 @@ jobs:
         working-directory: examples/bazel-example
       - run: du -h index.scip
         working-directory: examples/bazel-example
+      - name: Check the Test role of testonly targets
+        # Every occurrence of the java_test and of the testonly library has
+        # SymbolRole.Test (0x20), and no occurrence of the plain java_library.
+        run: |
+          scip print --json index.scip | jq -e '
+            def test_roles($file):
+              [.documents[] | select(.relative_path == "src/main/java/test_code_example/" + $file)
+               | .occurrences[] | ((.symbol_roles // 0) / 32 | floor) % 2 == 1] | unique;
+            test_roles("Greeter.java") == [false]
+            and test_roles("GreeterAssertions.java") == [true]
+            and test_roles("GreeterTest.java") == [true]'
+        working-directory: examples/bazel-example
 
   snapshots:
     runs-on: ubuntu-latest
